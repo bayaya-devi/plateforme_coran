@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الأستاذ(ة) - جمعية مواهب المنان - دار القرآن والحديث</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="auth.js"></script>
+</head>
+<body class="bg-gray-50 font-['Cairo'] p-4 md:p-8">
+    <div class="flex justify-center mb-4 mt-2">
+    <img src="logo.webp" alt="مواهب المنان" class="h-24 object-contain drop-shadow-md">
+</div>
+
+    <header class="bg-white p-6 rounded-2xl shadow-sm flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-black text-emerald-800">مرحباً أستاذ(ة) <span id="prof-name"></span></h1>
+            <p class="text-gray-500">القسم: <span id="prof-classe" class="font-bold"></span></p>
+        </div>
+<button onclick="deconnexion()" class="bg-rose-100 text-rose-600 px-4 py-2 rounded-xl font-bold hover:bg-rose-200 transition"> الخروج</button> </header>
+
+    <div class="bg-white p-6 rounded-2xl shadow-sm">
+        <h2 class="text-xl font-bold text-gray-800 mb-6">📚 تلاميذي </h2>
+        <div id="students-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            </div>
+    </div>
+
+    <script>
+        function initProfDashboard() {
+            const sessionStr = localStorage.getItem('quran_session');
+            if (!sessionStr) return window.location.href = 'login.html';
+            
+            const session = JSON.parse(sessionStr);
+            if (session.role !== 'prof') return window.location.href = 'login.html'; // Sécurité
+
+            document.getElementById('prof-name').innerText = session.prenom;
+            document.getElementById('prof-classe').innerText = session.classe;
+
+            const profs = Auth.getProfs();
+            const users = Auth.getAllUsers();
+            const myData = profs[session.username];
+            // ── إضافة التحديث التلقائي هنا ─────────────────────────────────
+    chargerSuiviDevoirs(); // عرض الواجبات فور دخول الصفحة
+    setInterval(chargerSuiviDevoirs, 3000); // تحديث القائمة تلقائياً كل 5 ثوانٍ
+    // ───────────────────────────────────────────────────────────────
+            const grid = document.getElementById('students-grid');
+            if (!myData || !myData.students || myData.students.length === 0) {
+                grid.innerHTML = '<p class="text-gray-500 col-span-full">لا يوجد تلاميذ مرتبطين بحسابك حالياً. </p>';
+                return;
+            }
+
+            myData.students.forEach(studentId => {
+                const s = users[studentId];
+                if (!s) return; // Si l'élève a été supprimé
+
+                // REMPLACE CETTE PARTIE DANS LA BOUCLE myData.students.forEach :
+grid.innerHTML += `
+    <div class="border border-emerald-100 p-4 rounded-xl hover:shadow-md transition bg-emerald-50/30">
+        <h3 class="font-black text-lg text-gray-800">${s.prenom} ${s.nom}</h3>
+        <p class="text-xs text-gray-500 mb-3">مسجل منذ: ${new Date(s.createdAt).toLocaleDateString()}</p>
+        
+        <div class="space-y-2">
+            
+            <button onclick="ouvrirModalDevoir('${studentId}', '${s.prenom} ${s.nom}')" class="w-full text-center bg-indigo-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">
+                📖 إرسال واجب 
+            </button>
+        </div>
+    </div>
+`;
+            });
+        }
+
+        function deconnexion() {
+            localStorage.removeItem('quran_session');
+            window.location.href = 'login.html';
+        }
+
+        // --- FONCTIONS POUR LES DEVOIRS ---
+function ouvrirModalDevoir(studentId, studentName) {
+    document.getElementById('devoir-student-id').value = studentId;
+    document.getElementById('devoir-student-name').innerText = studentName;
+    document.getElementById('modal-devoir').classList.remove('hidden');
+}
+
+function fermerModalDevoir() {
+    document.getElementById('modal-devoir').classList.add('hidden');
+    // Réinitialiser les champs
+    document.getElementById('devoir-surate').value = '';
+    document.getElementById('devoir-debut').value = '';
+    document.getElementById('devoir-fin').value = '';
+    document.getElementById('devoir-date').value = '';
+}
+// Fonction pour afficher la liste des devoirs envoyés par ce professeur
+function chargerSuiviDevoirs() {
+    const container = document.getElementById('liste-suivi-devoirs');
+    if (!container) return;
+
+    // التصحيح 1: استخدام المفتاح الصحيح للجلسة 'quran_session'
+    const session = JSON.parse(localStorage.getItem('quran_session') || '{}');
+    const tousLesDevoirs = JSON.parse(localStorage.getItem('devoirs') || '[]');
+    
+    // فلترة الواجبات الخاصة بهذا الأستاذ
+    const mesDevoirs = tousLesDevoirs.filter(d => d.profId === session.username);
+    
+    if (mesDevoirs.length === 0) {
+        container.innerHTML = `<p class="text-gray-500 italic">لا يوجد أي واجب مسجل </p>`;
+        return;
+    }
+
+    let html = '';
+    // التصحيح 2: استخدام المتغير الصحيح 'mesDevoirs'
+    mesDevoirs.forEach(devoir => {
+        const deadline = new Date(devoir.dateLimite);
+        const dateStr = deadline.toLocaleDateString('fr-FR');
+
+        // التصحيح 3: استخدام المتغيرات الصحيحة الخاصة بالكائن (surate, ayaDebut...)
+        html += `
+        <div class="border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row justify-between md:items-center bg-white shadow-sm hover:shadow transition">
+            <div class="mb-4 md:mb-0">
+                <h3 class="font-bold text-lg text-gray-800">سورة ${devoir.surate} (من الآية ${devoir.ayaDebut} إلى ${devoir.ayaFin})</h3>
+                <p class="text-sm text-gray-600 mt-1">التلميذ : <span class="font-semibold text-blue-600">${devoir.studentId}</span></p>
+                <div class="flex items-center gap-2 mt-2">
+                    <span class="bg-rose-50 text-rose-600 text-xs px-2 py-1 rounded-md font-bold">
+                        <i class="far fa-clock"></i> آخر أجل : ${dateStr}
+                    </span>
+                </div>
+            </div>
+            
+            <div>
+                <button onclick="confirmerAnnulationDevoir('${devoir.id}')" 
+                        class="w-full md:w-auto bg-red-100 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition-all">
+                    إلغاء الواجب 
+                </button>
+            </div>
+        </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// Fonction pour gérer le clic sur le bouton "Annuler"
+function confirmerAnnulationDevoir(devoirId) {
+    if (confirm("هل انت متاكد.")) {
+        Auth.annulerDevoir(devoirId);
+        chargerSuiviDevoirs(); // On rafraîchit la liste instantanément
+        alert("تم سحب الواجب.");
+    }
+}
+
+// N'oubliez pas d'appeler chargerSuiviDevoirs() au chargement de la page
+// par exemple dans votre fonction initProfDashboard() ou au DOMContentLoaded
+function envoyerDevoir() {
+    const studentId = document.getElementById('devoir-student-id').value;
+    const surate = document.getElementById('devoir-surate').value;
+    const ayaDebut = document.getElementById('devoir-debut').value;
+    const ayaFin = document.getElementById('devoir-fin').value;
+    const dateLimite = document.getElementById('devoir-date').value;
+    
+    if(!surate || !ayaDebut || !ayaFin || !dateLimite) {
+        return alert("المرجو ملء جميع الخانات ");
+    }
+
+    const session = JSON.parse(localStorage.getItem('quran_session'));
+    const profName = session.prenom; // Nom du professeur actuel
+
+    const result = Auth.ajouterDevoir(studentId, profName, surate, ayaDebut, ayaFin, dateLimite);
+    
+    if(result.ok) {
+        alert("تم إرسال الواجب بنجاح ! ");
+        fermerModalDevoir();
+    }
+}
+
+
+        window.onload = initProfDashboard;
+    </script>
+    <!-- Modale d'envoi de devoir (Cachée par défaut) -->
+<div id="modal-devoir" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+        <h2 class="text-xl font-black text-gray-800 mb-4">📖 إرسال واجب </h2>
+        <p class="text-sm text-gray-500 mb-4">إلى التلميذ: <span id="devoir-student-name" class="font-bold text-emerald-600"></span></p>
+        
+        <input type="hidden" id="devoir-student-id">
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">السورة </label>
+                <input type="text" id="devoir-surate"  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-200 outline-none">
+            </div>
+            
+            <div class="flex gap-4">
+                <div class="flex-1">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">من الآية </label>
+                    <input type="number" id="devoir-debut" min="1" class="w-full px-3 py-2 border rounded-lg outline-none">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">إلى الآية </label>
+  <input type="number" id="devoir-fin" min="1" class="w-full px-3 py-2 border rounded-lg outline-none">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">آخر أجل </label>
+                <input type="date" id="devoir-date" class="w-full px-3 py-2 border rounded-lg outline-none">
+            </div>
+        </div>
+
+        <div class="flex gap-3 mt-6">
+            <button onclick="fermerModalDevoir()" class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg font-bold hover:bg-gray-200">إلغاء </button>
+            <button onclick="envoyerDevoir()" class="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold hover:bg-emerald-700">إرسال </button>
+        </div>
+    </div>
+</div>
+<!-- Section Suivi des Devoirs -->
+<div class="bg-white rounded-2xl shadow-sm p-6 mt-8">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold text-gray-800">
+            <i class="fas fa-tasks text-blue-500 mr-2"></i> 
+        </h2>
+        <button onclick="chargerSuiviDevoirs()" class="text-sm text-blue-600 hover:text-blue-800 transition">
+            <i class="fas fa-sync-alt"></i> 
+        </button>
+    </div>
+    
+    <!-- Liste générée dynamiquement -->
+    <div id="liste-suivi-devoirs" class="space-y-4">
+        <!-- Les devoirs apparaîtront ici -->
+    </div>
+</div>
+</body>
+</html>
