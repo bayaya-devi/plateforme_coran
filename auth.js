@@ -72,38 +72,37 @@ const Auth = (() => {
   }
 
   // --- استبدل دالة login ---
-  function login(prenom, nom, password) {
-    prenom   = prenom.trim();
-    nom      = nom.trim();
-    password = password.trim();
+  import { supabase } from './supabaseClient'; // Le fichier créé à l'étape précédente
 
-    if (!prenom || !nom || !password)
-      return { ok: false, error: 'يرجى ملء جميع الحقول' };
+async function login(prenom, nom, password) {
+  // 1. On génère le même username
+  const username = `${prenom.trim()}.${nom.trim()}`.toLowerCase().replace(/\s+/g, '_');
+  const fakeEmail = `${username}@quran.local`; // Supabase a besoin d'un email
 
-    const username = (prenom + '.' + nom).toLowerCase()
-                       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                       .replace(/\s+/g, '_');
+  // 2. On demande à Supabase de connecter l'utilisateur
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: fakeEmail,
+    password: password,
+  });
 
-    const users = load(USERS_KEY);
-    const user  = users[username];
-
-    if (!user)
-      return { ok: false, error: 'لم يتم العثور على هذا الحساب' };
-    
-    // التوافقية مع كلمات المرور القديمة والجديدة
-    let isPassValid = false;
-    try { if (atob(user.password) === password) isPassValid = true; } catch(e) {}
-    if (user.password === password) isPassValid = true;
-
-    if (!isPassValid)
-      return { ok: false, error: 'كلمة المرور غير صحيحة' };
-      
-    if (user.isSuspended) {
-      return { ok: false, error: "حساب مغلق بسبب عدم أداء الواجب الشهري أو كثرة الغيابات, المرجو الاتصال بالادارة." };
-    }
-    _setSession(username, user.prenom, user.nom);
-    return { ok: true, username };
+  if (error) {
+    return { ok: false, error: 'Identifiants incorrects' };
   }
+
+  // 3. (Optionnel) Vérifier si le compte est suspendu dans la table profiles
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_suspended')
+    .eq('id', data.user.id)
+    .single();
+
+  if (profile?.is_suspended) {
+    await supabase.auth.signOut();
+    return { ok: false, error: "حساب مغلق (Compte suspendu)." };
+  }
+
+  return { ok: true, username };
+}
 
   // --- استبدل دالتي registerProf و loginProf ---
   function registerProf(prenom, classe, password) {
